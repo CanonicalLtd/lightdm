@@ -952,14 +952,25 @@ find_session_config (Seat *seat, const gchar *sessions_dir, const gchar *session
     g_return_val_if_fail (sessions_dir != NULL, NULL);
     g_return_val_if_fail (session_name != NULL, NULL);
 
+    g_auto(GStrv) session_name_type;
+    g_autofree gchar *filename;
+
     g_auto(GStrv) dirs = g_strsplit (sessions_dir, ":", -1);
+    if (g_strrstr (session_name, "@") != NULL) {
+        session_name_type = g_strsplit (session_name, "@", 2);
+        filename = g_strdup_printf ("%s.desktop", session_name_type[0]);
+    } else {
+        filename = g_strdup_printf ("%s.desktop", session_name);
+    }
     for (int i = 0; dirs[i]; i++)
     {
         const gchar *default_session_type = "x";
         if (dirs[i] != NULL && g_str_has_suffix (dirs[i], "/wayland-sessions") == TRUE)
             default_session_type = "wayland";
 
-        g_autofree gchar *filename = g_strdup_printf ("%s.desktop", session_name);
+        if (g_strv_length (session_name_type) > 0 && g_strcmp0 (session_name_type[1], default_session_type))
+            continue;
+
         g_autofree gchar *path = g_build_filename (dirs[i], filename, NULL);
         g_autoptr(GError) error = NULL;
         SessionConfig *session_config = session_config_new_from_file (path, default_session_type, &error);
@@ -976,9 +987,17 @@ static void
 configure_session (Session *session, SessionConfig *config, const gchar *session_name, const gchar *language)
 {
     session_set_config (session, config);
-    session_set_env (session, "XDG_SESSION_DESKTOP", session_name);
-    session_set_env (session, "DESKTOP_SESSION", session_name);
-    session_set_env (session, "GDMSESSION", session_name);
+
+    if (g_strrstr (session_name, "@") != NULL) {
+        g_auto(GStrv) session_name_type = g_strsplit (session_name, "@", 2);
+        session_set_env (session, "XDG_SESSION_DESKTOP", session_name_type[0]);
+        session_set_env (session, "DESKTOP_SESSION", session_name_type[0]);
+        session_set_env (session, "GDMSESSION", session_name_type[0]);
+    } else {
+        session_set_env (session, "XDG_SESSION_DESKTOP", session_name);
+        session_set_env (session, "DESKTOP_SESSION", session_name);
+        session_set_env (session, "GDMSESSION", session_name);
+    }
     gchar **desktop_names = session_config_get_desktop_names (config);
     if (desktop_names)
     {
