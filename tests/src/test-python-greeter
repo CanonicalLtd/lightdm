@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import sys
 import os
@@ -33,7 +33,7 @@ status_socket = None
 
 def status_notify (message):
     if status_socket is not None:
-        status_socket.send (struct.pack ('i', len (message)) + message)
+        status_socket.send (struct.pack ('i', len (message)) + message.encode ())
     else:
         sys.stderr.write ('%s\n' % message)
 
@@ -44,7 +44,7 @@ def request_cb (channel, condition):
         return False
     if len (length) > 0:
         (l,) = struct.unpack ('i', length)
-        request = status_socket.recv (l)
+        request = status_socket.recv (l).decode ('utf-8')
 
     r = '%s AUTHENTICATE' % greeter_id
     if request == r:
@@ -107,14 +107,7 @@ def request_cb (channel, condition):
     r = '%s LOG-SESSIONS' % greeter_id
     if request == r:
         sessions = LightDM.get_sessions ();
-        def compare_session (a, b):
-            if a.get_key () > b.get_key ():
-                return 1
-            elif a.get_key () < b.get_key ():
-                return -1
-            else:
-                return 0
-        sessions.sort (compare_session)
+        sessions.sort (key = lambda x: x.get_key ())
         for session in sessions:
             status_notify ('%s LOG-SESSION KEY=%s' % (greeter_id, session.get_key ()))
 
